@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {console2} from "forge-std/console2.sol";
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Client} from "@chainlink/contracts-ccip/src/v0.8/ccip/libraries/Client.sol";
 import {IRouterClient} from "@chainlink/contracts-ccip/src/v0.8/ccip/interfaces/IRouterClient.sol";
 import {IAny2EVMMessageReceiver} from "@chainlink/contracts-ccip/src/v0.8/ccip/interfaces/IAny2EVMMessageReceiver.sol";
 import {OwnerIsCreator} from "@chainlink/contracts-ccip/src/v0.8/shared/access/OwnerIsCreator.sol";
-import {LinkTokenInterface} from "@chainlink/contracts-ccip/src/v0.8/shared/interfaces/LinkTokenInterface.sol";
 import {SafeTransferLib} from "solady/src/utils/SafeTransferLib.sol";
 import {EnumerableMap} from "@openzeppelin/contracts/utils/structs/EnumerableMap.sol";
 
@@ -35,6 +35,7 @@ contract CrossChainDex is IAny2EVMMessageReceiver, ReentrancyGuard, OwnerIsCreat
     //////////////////////////////
     error CrossChainDex__ErrorCase(); // TODO: Remove later
     error CrossChainDex__OnlySelf();
+    error CrossChainDex__TransferFailed();
     error CrossChainDex__InvalidRouter(address router);
     error CrossChainDex__NotEnoughBalanceForFees(
         uint256 currentBalance,
@@ -153,6 +154,31 @@ contract CrossChainDex is IAny2EVMMessageReceiver, ReentrancyGuard, OwnerIsCreat
         return i_ccipRouter.getFee(destinationChainSelector, message);
     }
 
+    function getGasFee(
+        address from,
+        address to,
+        address tokenIn,
+        uint256 amountIn,
+        address tokenOut,
+        uint256 minAmountOut,
+        uint256 swapAtSource,
+        uint64 destinationChainSelector
+    ) external view returns (uint256 fee) {
+        // Create an array with a single EVMTokenAmount
+        Client.EVMTokenAmount[] memory tokenAmounts = new Client.EVMTokenAmount[](1);
+        tokenAmounts[0] = Client.EVMTokenAmount({ token: tokenIn, amount: amountIn });
+        Client.EVM2AnyMessage memory message = Client.EVM2AnyMessage({
+            receiver: abi.encode(
+                s_chains[destinationChainSelector].dexAddress
+            ),
+            data: abi.encode(from, to, tokenIn, amountIn, tokenOut, minAmountOut, swapAtSource),
+            tokenAmounts: tokenAmounts,
+            extraArgs: s_chains[destinationChainSelector].ccipExtraArgsBytes,
+            feeToken: address(0) // implying to pay gas in native token
+        });
+        return i_ccipRouter.getFee(destinationChainSelector, message);
+    }
+
     // 0. Calculate the correct gasLimit to be sent for the destination chain (via Tenderly) - Important for gas optimization
     // TODO: Check the same for different tokens - in case it differs for different tokens
 
@@ -205,6 +231,7 @@ contract CrossChainDex is IAny2EVMMessageReceiver, ReentrancyGuard, OwnerIsCreat
                 destinationChainSelector,
                 message
             );
+            console2.logBytes32(messageId);
         
         emit CrossChainSent(
             messageId,
@@ -356,6 +383,24 @@ contract CrossChainDex is IAny2EVMMessageReceiver, ReentrancyGuard, OwnerIsCreat
 
         // Emit an event indicating that the message has been recovered.
         emit MessageRecovered(messageId);
+    }
+
+    function withdrawToken(
+        address _beneficiary,
+        address _token
+    ) public onlyOwner {
+        uint256 amount = IERC20(_token).balanceOf(address(this));
+
+        if (amount == 0) revert CrossChainDex__NothingToWithdraw();
+
+        IERC20(_token).transfer(_beneficiary, amount);
+    }
+
+    function withdrawNativeToken() public onlyOwner {
+        uint256 amount = address(this).balance;
+        if (amount == 0) revert CrossChainDex__NothingToWithdraw();
+        (bool success,) = owner().call{ value: address(this).balance }("");
+        if (!success) revert CrossChainDex__TransferFailed();
     }
 
     // 4. Create the script to ensure that the same dex can receive as well on the other chain, having the same address (via create2)

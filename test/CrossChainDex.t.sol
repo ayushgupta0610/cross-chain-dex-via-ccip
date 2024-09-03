@@ -11,15 +11,17 @@ import {MockCCIPRouter} from "@chainlink/contracts-ccip/src/v0.8/ccip/test/mocks
 contract CrossChainDexTest is Test {
     
     address private constant BOB = 0x47D1111fEC887a7BEb7839bBf0E1b3d215669D86;
+    uint256 private constant AMOUNT = 1000_000;
     // Avalanche Fuji Testnet constants
     uint64 private constant FUJI_CHAIN_SELECTOR = 14767482510784806043;
     address private constant FUJI_USDC_TOKEN = 0x5425890298aed601595a70AB815c96711a31Bc65;
     address private constant FUJI_LINK_TOKEN = 0x0b9d5D9136855f6FEc3c0993feE6E9CE8a297846;
-    uint256 private constant AMOUNT = 1000_000;
+    // address private constant FUJI_ROUTER_ADDRESS = 0xF694E193200268f9a4868e4Aa017A0118C9a8177;
 
     // Ethereum Sepolia Testnet constants
     uint64 private constant SEPOLIA_CHAIN_SELECTOR = 16015286601757825753;
     address private constant SEPOLIA_USDC_TOKEN = 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238;
+    // address private constant SEPOLIA_ROUTER_ADDRESS = 0x0BF3dE8c5D3e8A2B34D2BEeB17ABfCeBaf363A59;
 
     CrossChainDex private senderCrossChainDex;
     // SwapTestnetUSDC private swapTestnetUSDC;
@@ -77,7 +79,7 @@ contract CrossChainDexTest is Test {
         // vm.makePersistent(address(senderCrossChainDex), address(receiverCrossChainDex)); // TODO: Uncomment this
     }
 
-    function testDepositCrossChain() public {
+    function testSwapCrossChain() public {
         // Step 4) On Avalanche Fuji, call enableChain function
         // vm.selectFork(ethSepoliaFork);
         // uint256 balanceBeforeOnSepolia = IERC20(SEPOLIA_USDC_TOKEN).balanceOf(BOB);
@@ -97,6 +99,17 @@ contract CrossChainDexTest is Test {
         IERC20(FUJI_USDC_TOKEN).transfer(address(senderCrossChainDex), amount);
         console.log("FUJI_USDC_TOKEN balance of address(senderCrossChainDex): ", IERC20(FUJI_USDC_TOKEN).balanceOf(address(senderCrossChainDex)));
 
+        uint256 gasFee = senderCrossChainDex.getGasFee(
+            address(this),
+            address(receiverCrossChainDex),
+            FUJI_USDC_TOKEN,
+            amount,
+            SEPOLIA_USDC_TOKEN,
+            amount,
+            1,
+            SEPOLIA_CHAIN_SELECTOR
+        );
+        console.log("Gas fee: ", gasFee);
         uint64 gasLimit = 500_000;
         uint64 fee = .1 ether; // TODO: Calculate the exact gas fee required to be passed as the msg.value
         vm.prank(BOB);
