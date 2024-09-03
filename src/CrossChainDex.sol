@@ -22,9 +22,9 @@ contract CrossChainDex is IAny2EVMMessageReceiver, ReentrancyGuard, OwnerIsCreat
     );
     error CrossChainDex__NothingToWithdraw();
     error CrossChainDex__ChainNotEnabled(uint64 chainSelector);
-    error CrossChainDex__SenderNotEnabled(address sender);
     error CrossChainDex__OperationNotAllowedOnCurrentChain(uint64 chainSelector);
     error CrossChainDex__DestinationChainNotAllowlisted(uint64 chainSelector);
+    error CrossChainDex__SenderNotEnabled(uint64 chainSelector, address sender);
 
     //////////////////////////////
     // Type
@@ -91,9 +91,15 @@ contract CrossChainDex is IAny2EVMMessageReceiver, ReentrancyGuard, OwnerIsCreat
         _;
     }
 
-    modifier onlyEnabledChain(uint64 _chainSelector) {
-        if (s_chains[_chainSelector].dexAddress == address(0))
-            revert CrossChainDex__ChainNotEnabled(_chainSelector);
+    modifier onlyEnabledChain(uint64 chainSelector) {
+        if (s_chains[chainSelector].dexAddress == address(0))
+            revert CrossChainDex__ChainNotEnabled(chainSelector);
+        _;
+    }
+
+    modifier onlyEnabledSender(uint64 chainSelector, address sender) {
+        if (s_chains[chainSelector].dexAddress != sender)
+            revert CrossChainDex__SenderNotEnabled(chainSelector, sender);
         _;
     }
 
@@ -150,6 +156,8 @@ contract CrossChainDex is IAny2EVMMessageReceiver, ReentrancyGuard, OwnerIsCreat
         if (swapAtSource == 1) {
             // TODO: Swap the tokenIn to tokenOut via a price aggregator
         }
+
+        IERC20(tokenIn).approve(address(i_ccipRouter), amountIn);
         // Create an array with a single EVMTokenAmount
         Client.EVMTokenAmount[] memory tokenAmounts = new Client.EVMTokenAmount[](1);
         tokenAmounts[0] = Client.EVMTokenAmount({ token: tokenIn, amount: amountIn });
@@ -203,7 +211,10 @@ contract CrossChainDex is IAny2EVMMessageReceiver, ReentrancyGuard, OwnerIsCreat
         override
         onlyRouter
         nonReentrant
-        onlyEnabledChain(message.sourceChainSelector)
+        onlyEnabledSender(
+            message.sourceChainSelector,
+            abi.decode(message.sender, (address))
+        )
     {
         uint64 sourceChainSelector = message.sourceChainSelector;
         (

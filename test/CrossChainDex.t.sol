@@ -95,11 +95,12 @@ contract CrossChainDexTest is Test {
         uint256 amount = 1000_000;
         vm.prank(BOB);
         IERC20(FUJI_USDC_TOKEN).transfer(address(senderCrossChainDex), amount);
+        console.log("FUJI_USDC_TOKEN balance of address(senderCrossChainDex): ", IERC20(FUJI_USDC_TOKEN).balanceOf(address(senderCrossChainDex)));
 
-        // TODO: Check if approve is required by senderCrossChainDex on FUJI_USDC_TOKEN to the router
-        uint64 gasLimit = 500_000; 
+        uint64 gasLimit = 500_000;
+        uint64 fee = .1 ether; // TODO: Calculate the exact gas fee required to be passed as the msg.value
         vm.prank(BOB);
-        senderCrossChainDex.ccipSend(
+        senderCrossChainDex.ccipSend{value: fee}(
             address(this),
             address(receiverCrossChainDex),
             FUJI_USDC_TOKEN,
