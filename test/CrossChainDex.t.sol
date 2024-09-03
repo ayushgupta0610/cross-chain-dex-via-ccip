@@ -44,16 +44,17 @@ contract CrossChainDexTest is Test {
         router = new MockCCIPRouter();
         vm.makePersistent(address(ccipLocalSimulatorFork), address(router));
 
-        // Step 1) Deploy TransferUSDC.sol to Avalanche Fuji
+        // Step 1) Deploy CrossChainDex.sol to Avalanche Fuji
         assertEq(vm.activeFork(), avaxFujiFork);
 
         senderCrossChainDex = new CrossChainDex(address(router), FUJI_CHAIN_SELECTOR);
-        console.log("TransferUSDC deployed to: ", address(senderCrossChainDex));
-        senderCrossChainDex.allowlistDestinationChain(SEPOLIA_CHAIN_SELECTOR, true);
+        console.log("CrossChainDex deployed to: ", address(senderCrossChainDex));
+        // vm.deal(address(senderCrossChainDex), 1 ether); // Note: The deployed contract should be funded with ether at the time of calling the function
+        // senderCrossChainDex.enableChain(SEPOLIA_CHAIN_SELECTOR, address(receiverCrossChainDex), "");
         IERC20(FUJI_USDC_TOKEN).approve(address(senderCrossChainDex), AMOUNT);
 
-        vm.prank(BOB);
-        IERC20(FUJI_LINK_TOKEN).transfer(address(senderCrossChainDex), 3 ether);
+        // vm.prank(BOB);
+        // IERC20(FUJI_LINK_TOKEN).transfer(address(senderCrossChainDex), 3 ether);
 
         // Step 2) Deploy SwapTestnetUSDC.sol on Ethereum Sepolia
         vm.selectFork(ethSepoliaFork);
@@ -66,36 +67,37 @@ contract CrossChainDexTest is Test {
         receiverCrossChainDex = new ReceiverDex(address(router), SEPOLIA_CHAIN_SELECTOR);
         console.log("ReceiverDex deployed to: ", address(receiverCrossChainDex));
 
-        // Step 4) Allowlist Avalanche Fuji chain on ReceiverDex.sol
-        receiverCrossChainDex.allowlistSourceChain(SEPOLIA_CHAIN_SELECTOR, true);
+        // Step 4) Allowlist Avalanche Fuji chain on ReceiverDex.sol (TODO: Check as to why this is making sense instead of FUJI_CHAIN_SELECTOR)
+        receiverCrossChainDex.allowlistSourceChain(SEPOLIA_CHAIN_SELECTOR, 1); // 1 to signify true (saves gas)
+        console.log("allowlistSourceChain on receiverCrossChainDex executed succesfully");
 
-        // Step 5) Allowlist sender TransferUSDC on ReceiverDex.sol
-        // receiverCrossChainDex.allowlistSender(address(senderCrossChainDex), true); // TODO: Uncomment this
+        // Step 5) Allowlist sender CrossChainDex on ReceiverDex.sol
+        // receiverCrossChainDex.allowlistSender(address(senderCrossChainDex), true); // TODO: Add this function in the receiver if necessary
 
-        // vm.makePersistent(address(receiverCrossChainDex)); // TODO: Uncomment this
+        // vm.makePersistent(address(senderCrossChainDex), address(receiverCrossChainDex)); // TODO: Uncomment this
     }
 
     function testDepositCrossChain() public {
-        // Step 4) On Avalanche Fuji, call allowlistDestinationChain function
+        // Step 4) On Avalanche Fuji, call enableChain function
         // vm.selectFork(ethSepoliaFork);
         // uint256 balanceBeforeOnSepolia = IERC20(SEPOLIA_USDC_TOKEN).balanceOf(BOB);
 
         vm.selectFork(avaxFujiFork);
         uint256 balanceBeforeOnFuji = IERC20(FUJI_USDC_TOKEN).balanceOf(BOB);
+        console.log("FUJI_USDC_TOKEN balance of Bob: ", balanceBeforeOnFuji);
 
-        vm.startPrank(BOB);
-        senderCrossChainDex.allowlistDestinationChain(SEPOLIA_CHAIN_SELECTOR, true);
-        console.log("TransferUSDC allowlistDestinationChain to: ", true);
+        senderCrossChainDex.enableChain(SEPOLIA_CHAIN_SELECTOR, address(receiverCrossChainDex), "");
         
-        // Step 3) On Avalanche Fuji, fund TransferUSDC.sol with 3 LINK
-        ccipLocalSimulatorFork.requestLinkFromFaucet(address(senderCrossChainDex), 3 ether);
+        // Step 3) On Avalanche Fuji, fund CrossChainDex.sol with 3 LINK
+        // ccipLocalSimulatorFork.requestLinkFromFaucet(address(senderCrossChainDex), 3 ether);
 
         // On Avalanche Fuji, call approve and transferUsdc function to receiverCrossChainDex
         uint256 amount = 1000_000;
         vm.prank(BOB);
         IERC20(FUJI_USDC_TOKEN).transfer(address(senderCrossChainDex), amount);
 
-        uint64 gasLimit = 295324; 
+        // TODO: Check if approve is required by senderCrossChainDex on FUJI_USDC_TOKEN to the router
+        uint64 gasLimit = 500_000; 
         vm.prank(BOB);
         senderCrossChainDex.ccipSend(
             address(this),
@@ -113,10 +115,10 @@ contract CrossChainDexTest is Test {
         // Get user's USDC balance on both chains before and after transfer
         uint256 balanceAfterOnFuji = IERC20(FUJI_USDC_TOKEN).balanceOf(BOB);
 
-        // ccipLocalSimulatorFork.switchChainAndRouteMessage(ethSepoliaFork);
-        // uint256 balanceAfterOnSepolia = IERC20(SEPOLIA_USDC_TOKEN).balanceOf(address(receiverCrossChainDex));
+        ccipLocalSimulatorFork.switchChainAndRouteMessage(ethSepoliaFork);
+        uint256 balanceAfterOnSepolia = IERC20(SEPOLIA_USDC_TOKEN).balanceOf(address(receiverCrossChainDex));
         // uint256 cUsdcBalanceOfCrossChainReceiver = IERC20(COMET).balanceOf(address(receiverCrossChainDex));
-        // console.log("Balance after on sepolia: ", cUsdcBalanceOfCrossChainReceiver);
+        console.log("Balance after on sepolia: ", balanceAfterOnSepolia);
 
         // Check if USDC was transferred
         assertEq(balanceAfterOnFuji, balanceBeforeOnFuji - amount);

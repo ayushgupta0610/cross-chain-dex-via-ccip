@@ -9,11 +9,12 @@ import {OwnerIsCreator} from "@chainlink/contracts-ccip/src/v0.8/shared/access/O
 import {LinkTokenInterface} from "@chainlink/contracts-ccip/src/v0.8/shared/interfaces/LinkTokenInterface.sol";
 import {CCIPReceiver} from "@chainlink/contracts-ccip/src/v0.8/ccip/applications/CCIPReceiver.sol";
 
-contract ReceiverDex is CCIPReceiver, OwnerIsCreator {
+contract ReceiverDex is CCIPReceiver, OwnerIsCreator, ReentrancyGuard {
     //////////////////////////////
     // Errors
     //////////////////////////////
     error CrossChainDex__InvalidRouter(address router);
+    error CrossChainDex__ChainNotEnabled(uint64 chainSelector);
 
     //////////////////////////////
     // State Variables
@@ -22,7 +23,7 @@ contract ReceiverDex is CCIPReceiver, OwnerIsCreator {
     uint64 private immutable i_currentChainSelector;
     // mapping(uint64 destChainSelector => DexDetails dexDetailsPerChain)public s_chains;
     // Mapping to keep track of allowlisted source chains.
-    mapping(uint64 chainSelecotor => bool isAllowlisted) public allowlistedSourceChains;
+    mapping(uint64 chainSelector => uint256 isAllowlisted) public allowlistedSourceChains;
 
     //////////////////////////////
     // Events
@@ -40,6 +41,11 @@ contract ReceiverDex is CCIPReceiver, OwnerIsCreator {
         uint64 destinationChainSelector
     );
 
+    modifier onlyEnabledChain(uint64 chainSelector) {
+        if (allowlistedSourceChains[chainSelector] != 1) revert CrossChainDex__ChainNotEnabled(chainSelector);
+        _;
+    }
+
     constructor(
         address ccipRouterAddress,
         uint64 currentChainSelector
@@ -51,7 +57,7 @@ contract ReceiverDex is CCIPReceiver, OwnerIsCreator {
 
     function allowlistSourceChain(
         uint64 _sourceChainSelector,
-        bool _allowed
+        uint256 _allowed
     ) external onlyOwner {
         allowlistedSourceChains[_sourceChainSelector] = _allowed;
     }
@@ -63,8 +69,8 @@ contract ReceiverDex is CCIPReceiver, OwnerIsCreator {
         virtual
         override
         onlyRouter
-        // nonReentrant
-        // onlyEnabledChain(message.sourceChainSelector)
+        nonReentrant
+        onlyEnabledChain(message.sourceChainSelector)
         // onlyEnabledSender(
         //     message.sourceChainSelector,
         //     abi.decode(message.sender, (address))

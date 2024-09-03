@@ -41,8 +41,8 @@ contract CrossChainDex is IAny2EVMMessageReceiver, ReentrancyGuard, OwnerIsCreat
     IRouterClient internal immutable i_ccipRouter;
     // LinkTokenInterface internal immutable i_linkToken;
     uint64 private immutable i_currentChainSelector;
-    mapping(uint64 destChainSelector => DexDetails dexDetailsPerChain)public s_chains;
-    mapping(uint64 => bool) public allowlistedChains;
+    mapping(uint64 chainSelector => DexDetails dexDetailsPerChain) public s_chains;
+    // mapping(uint64 => uint256) public allowlistedChains; // used uint256 instead of bool for gas optimization
 
     //////////////////////////////
     // Events
@@ -97,18 +97,6 @@ contract CrossChainDex is IAny2EVMMessageReceiver, ReentrancyGuard, OwnerIsCreat
         _;
     }
 
-    modifier onlyEnabledSender(uint64 _chainSelector, address _sender) {
-        if (s_chains[_chainSelector].dexAddress != _sender)
-            revert CrossChainDex__SenderNotEnabled(_sender);
-        _;
-    }
-
-    modifier onlyAllowlistedChain(uint64 _destinationChainSelector) {
-        if (!allowlistedChains[_destinationChainSelector])
-            revert CrossChainDex__DestinationChainNotAllowlisted(_destinationChainSelector);
-        _;
-    }
-
     constructor(
         address ccipRouterAddress,
         uint64 currentChainSelector
@@ -122,11 +110,13 @@ contract CrossChainDex is IAny2EVMMessageReceiver, ReentrancyGuard, OwnerIsCreat
         emit NativeTokenReceived(msg.sender, msg.value);
     }
 
-    function allowlistDestinationChain(
-        uint64 _destinationChainSelector,
-        bool _allowed
+    function enableChain(
+        uint64 chainSelector,
+        address dexAddress,
+        bytes calldata extraArgs
     ) external onlyOwner {
-        allowlistedChains[_destinationChainSelector] = _allowed;
+        s_chains[chainSelector].dexAddress = dexAddress;
+        s_chains[chainSelector].ccipExtraArgsBytes = extraArgs;
     }
 
     // Function to get the fee required to pay for sending the message cross chain
@@ -214,10 +204,6 @@ contract CrossChainDex is IAny2EVMMessageReceiver, ReentrancyGuard, OwnerIsCreat
         onlyRouter
         nonReentrant
         onlyEnabledChain(message.sourceChainSelector)
-        onlyEnabledSender(
-            message.sourceChainSelector,
-            abi.decode(message.sender, (address))
-        )
     {
         uint64 sourceChainSelector = message.sourceChainSelector;
         (
