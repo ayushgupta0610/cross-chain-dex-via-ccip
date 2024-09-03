@@ -2,9 +2,12 @@
 src = "src"
 out = "out"
 libs = ["lib"]
+viaIR = true
 
 remappings = [
     '@chainlink/contracts-ccip=lib/chainlink/contracts',
     '@chainlink/contracts=lib/chainlink-brownie-contracts/contracts',
-    '@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/'
+    '@chainlink/local=lib/chainlink-local/',
+    '@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/',
+    'solady/src=lib/solady/src'
 ]
