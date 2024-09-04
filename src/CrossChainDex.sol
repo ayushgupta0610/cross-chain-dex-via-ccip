@@ -33,7 +33,7 @@ contract CrossChainDex is IAny2EVMMessageReceiver, ReentrancyGuard, OwnerIsCreat
     //////////////////////////////
     // Errors
     //////////////////////////////
-    error CrossChainDex__ErrorCase(); // TODO: Remove later
+    error CrossChainDex__ErrorCase();
     error CrossChainDex__OnlySelf();
     error CrossChainDex__TransferFailed();
     error CrossChainDex__InvalidRouter(address router);
@@ -49,7 +49,8 @@ contract CrossChainDex is IAny2EVMMessageReceiver, ReentrancyGuard, OwnerIsCreat
     //////////////////////////////
     // State Variables
     //////////////////////////////
-    bool internal s_simRevert = false; // TODO: Remove this | This is used to simulate a revert in the processMessage function.
+    bool internal s_simRevert = false; 
+    uint256 public tempCounter = 1; // TODO: Remove this
     EnumerableMap.Bytes32ToUintMap internal s_failedMessages;
     IRouterClient internal immutable i_ccipRouter;
     // LinkTokenInterface internal immutable i_linkToken;
@@ -222,7 +223,7 @@ contract CrossChainDex is IAny2EVMMessageReceiver, ReentrancyGuard, OwnerIsCreat
         // Calcuate the fee required in native gas token
         // Get the fee required to send the CCIP message
         uint256 fees = i_ccipRouter.getFee(destinationChainSelector, message);
-        console2.log("fees: ", fees);
+        console2.log("getFee from the contract: ", fees);
             // The below can be put in a function
             if (fees > msg.value)
                 revert CrossChainDex__NotEnoughBalanceForFees(msg.value, fees);
@@ -269,6 +270,8 @@ contract CrossChainDex is IAny2EVMMessageReceiver, ReentrancyGuard, OwnerIsCreat
             abi.decode(message.sender, (address))
         ) // Make sure the source chain and sender are enabled
     {
+        tempCounter++;
+        console2.log("Counter got increased to 2");
         /* solhint-disable no-empty-blocks */
         try this.processMessage(message) {
             // Intentionally empty in this example; no action needed if processMessage succeeds
@@ -328,10 +331,10 @@ contract CrossChainDex is IAny2EVMMessageReceiver, ReentrancyGuard, OwnerIsCreat
     function processMessage(Client.Any2EVMMessage calldata message) 
         external 
         onlySelf 
-        // onlyEnabledSender(
-        //     message.sourceChainSelector,
-        //     abi.decode(message.sender, (address))
-        // )
+        onlyEnabledSender(
+            message.sourceChainSelector,
+            abi.decode(message.sender, (address))
+        )
     {
         // Simulate a revert for testing purposes
         if (s_simRevert) revert CrossChainDex__ErrorCase();

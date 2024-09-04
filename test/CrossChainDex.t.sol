@@ -44,12 +44,13 @@ contract CrossChainDexTest is Test {
         // Step 0) Deploy CCIPLocalSimulatorFork and MockCCIPRouter to get the setup ready
         ccipLocalSimulatorFork = new CCIPLocalSimulatorFork();
         router = new MockCCIPRouter();
-        vm.makePersistent(address(ccipLocalSimulatorFork), address(router));
 
         // Step 1) Deploy CrossChainDex.sol to Avalanche Fuji
         assertEq(vm.activeFork(), avaxFujiFork);
         senderCrossChainDex = new CrossChainDex(address(router), FUJI_CHAIN_SELECTOR);
         console.log("CrossChainDex deployed to: ", address(senderCrossChainDex));
+        vm.makePersistent(address(ccipLocalSimulatorFork), address(router), address(senderCrossChainDex));
+
         vm.prank(BOB);
         IERC20(FUJI_USDC_TOKEN).approve(address(senderCrossChainDex), AMOUNT);
 
@@ -61,11 +62,11 @@ contract CrossChainDexTest is Test {
         receiverCrossChainDex = new CrossChainDex(address(router), SEPOLIA_CHAIN_SELECTOR);
         console.log("ReceiverDex deployed to: ", address(receiverCrossChainDex));
 
-        // Step 4) Allowlist Avalanche Fuji chain on ReceiverDex.sol (TODO: Check as to why this is making sense instead of FUJI_CHAIN_SELECTOR)
+        // Step 4) Allowlist Avalanche Fuji chain on ReceiverDex.sol
         receiverCrossChainDex.enableChain(FUJI_CHAIN_SELECTOR, address(senderCrossChainDex), "");
         console.log("allowlistSourceChain on receiverCrossChainDex executed succesfully");
 
-        vm.makePersistent(address(senderCrossChainDex), address(receiverCrossChainDex)); // TODO: Uncomment this
+        vm.makePersistent(address(receiverCrossChainDex));
     }
 
     function testSwapCrossChain() public {
@@ -86,6 +87,7 @@ contract CrossChainDexTest is Test {
         // IERC20(FUJI_USDC_TOKEN).transfer(address(senderCrossChainDex), amount);
         // console.log("FUJI_USDC_TOKEN balance of address(senderCrossChainDex): ", IERC20(FUJI_USDC_TOKEN).balanceOf(address(senderCrossChainDex)));
 
+        // TODO: Calculate the exact gas fee required to be passed as the msg.value
         uint256 gasFee = senderCrossChainDex.getGasFee(
             address(senderCrossChainDex),
             address(receiverCrossChainDex),
@@ -98,9 +100,8 @@ contract CrossChainDexTest is Test {
         );
         console.log("Gas fee required for ccipSend: ", gasFee);
         uint64 gasLimit = 500_000; // TODO: Add extraArgs param that is required
-        uint64 fee = .1 ether; // TODO: Calculate the exact gas fee required to be passed as the msg.value
         vm.prank(BOB);
-        senderCrossChainDex.ccipSend{value: fee}(
+        senderCrossChainDex.ccipSend{value: gasFee}(
             address(senderCrossChainDex),
             address(receiverCrossChainDex),
             FUJI_USDC_TOKEN,
@@ -118,11 +119,13 @@ contract CrossChainDexTest is Test {
 
         ccipLocalSimulatorFork.switchChainAndRouteMessage(ethSepoliaFork);
         uint256 balanceAfterOnSepolia = IERC20(SEPOLIA_USDC_TOKEN).balanceOf(address(receiverCrossChainDex));
-        // uint256 cUsdcBalanceOfCrossChainReceiver = IERC20(COMET).balanceOf(address(receiverCrossChainDex));
         console.log("Balance after on sepolia: ", balanceAfterOnSepolia);
+        uint256 tempCounterOnSepolia = receiverCrossChainDex.tempCounter();
+        console.log("tempCounterOnSepolia: ", tempCounterOnSepolia);
 
         // Check if USDC was transferred
         assertEq(balanceAfterOnFuji, balanceBeforeOnFuji - amount);
+        // assertEq(tempCounterOnSepolia, 2);
         // assertEq compound usdc token balance of receiverCrossChainDex
     }
 
