@@ -18,7 +18,7 @@ contract CrossChainDex is IAny2EVMMessageReceiver, ReentrancyGuard, OwnerIsCreat
     // Type
     //////////////////////////////
     using EnumerableMap for EnumerableMap.Bytes32ToUintMap;
-    using SafeTransferLib for IERC20;
+    using SafeTransferLib for address;
     struct DexDetails {
         address dexAddress;
         bytes ccipExtraArgsBytes;
@@ -198,9 +198,10 @@ contract CrossChainDex is IAny2EVMMessageReceiver, ReentrancyGuard, OwnerIsCreat
         onlyEnabledChain(destinationChainSelector)
         returns (bytes32 messageId)
     {
-        
-        if (swapAtSource == 1) {
+        tokenIn.safeTransferFrom(msg.sender, address(this), amountIn);
+        if (swapAtSource == 1) { // Which should be the default case to save gas fee (comes with overhead of transaction fee) for the user
             // TODO: Swap the tokenIn to tokenOut via a price aggregator
+            // No need of transferring the two additional params via ccipSend
         }
 
         IERC20(tokenIn).approve(address(i_ccipRouter), amountIn);
@@ -221,7 +222,7 @@ contract CrossChainDex is IAny2EVMMessageReceiver, ReentrancyGuard, OwnerIsCreat
         // Calcuate the fee required in native gas token
         // Get the fee required to send the CCIP message
         uint256 fees = i_ccipRouter.getFee(destinationChainSelector, message);
-
+        console2.log("fees: ", fees);
             // The below can be put in a function
             if (fees > msg.value)
                 revert CrossChainDex__NotEnoughBalanceForFees(msg.value, fees);
