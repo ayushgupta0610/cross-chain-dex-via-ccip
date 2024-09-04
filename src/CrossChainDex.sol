@@ -174,7 +174,9 @@ contract CrossChainDex is IAny2EVMMessageReceiver, ReentrancyGuard, OwnerIsCreat
             ),
             data: abi.encode(from, to, tokenIn, amountIn, tokenOut, minAmountOut, swapAtSource),
             tokenAmounts: tokenAmounts,
-            extraArgs: s_chains[destinationChainSelector].ccipExtraArgsBytes,
+            extraArgs: Client._argsToBytes(
+                Client.EVMExtraArgsV1({gasLimit: 0})
+            ), // TODO: Update this
             feeToken: address(0) // implying to pay gas in native token
         });
         return i_ccipRouter.getFee(destinationChainSelector, message);
@@ -216,7 +218,9 @@ contract CrossChainDex is IAny2EVMMessageReceiver, ReentrancyGuard, OwnerIsCreat
             ),
             data: abi.encode(from, to, tokenIn, amountIn, tokenOut, minAmountOut, swapAtSource),
             tokenAmounts: tokenAmounts,
-            extraArgs: s_chains[destinationChainSelector].ccipExtraArgsBytes,
+            extraArgs: Client._argsToBytes(
+                Client.EVMExtraArgsV1({gasLimit: 0})
+            ), // TODO: s_chains[destinationChainSelector].ccipExtraArgsBytes,
             feeToken: address(0) // implying to pay gas in native token
         });
 
@@ -272,22 +276,22 @@ contract CrossChainDex is IAny2EVMMessageReceiver, ReentrancyGuard, OwnerIsCreat
     {
         tempCounter++;
         console2.log("Counter got increased to 2");
-        /* solhint-disable no-empty-blocks */
-        try this.processMessage(message) {
-            // Intentionally empty in this example; no action needed if processMessage succeeds
-        } catch (bytes memory err) {
-            // Could set different error codes based on the caught error. Each could be
-            // handled differently.
-            s_failedMessages.set(
-                message.messageId,
-                uint256(ErrorCode.BASIC)
-            );
-            s_messageContents[message.messageId] = message;
-            // Don't revert so CCIP doesn't revert. Emit event instead.
-            // The message can be retried later without having to do manual execution of CCIP.
-            emit MessageFailed(message.messageId, err);
-            return;
-        }
+        // /* solhint-disable no-empty-blocks */
+        // try this.processMessage(message) {
+        //     // Intentionally empty in this example; no action needed if processMessage succeeds
+        // } catch (bytes memory err) {
+        //     // Could set different error codes based on the caught error. Each could be
+        //     // handled differently.
+        //     s_failedMessages.set(
+        //         message.messageId,
+        //         uint256(ErrorCode.BASIC)
+        //     );
+        //     s_messageContents[message.messageId] = message;
+        //     // Don't revert so CCIP doesn't revert. Emit event instead.
+        //     // The message can be retried later without having to do manual execution of CCIP.
+        //     emit MessageFailed(message.messageId, err);
+        //     return;
+        // }
     }
 
     function _ccipReceive(Client.Any2EVMMessage calldata message) internal {
